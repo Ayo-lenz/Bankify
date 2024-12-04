@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-} //the function specifies ia a user is active or not
+} //the function is a classname which specifies if a user is active or not
 
 // FORMAT DATE TIME
 export const formatDateTime = (dateString: Date) => {

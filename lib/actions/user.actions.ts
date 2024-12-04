@@ -1,6 +1,6 @@
 "use server";
 
-import { ID } from "node-appwrite";
+import { ID, Query } from "node-appwrite";
 import { createSessionClient, createAdminClient } from "../appwrite";
 import { cookies } from "next/headers";
 import { encryptId, extractCustomerIdFromUrl, parseStringify } from "../utils";
@@ -14,6 +14,33 @@ import { plaidClient } from "@/lib/plaid";
 import { revalidatePath } from "next/cache";
 import { addFundingSource, createDwollaCustomer } from "./dwolla.actions";
 
+const {
+  APPWRITE_DATABASE_ID: DATABASE_ID,
+  APPWRITE_USER_COLLECTION_ID: USER_COLLECTION_ID,
+  APPWRITE_BANK_COLLECTION_ID: BANK_COLLECTION_ID,
+} = process.env;
+
+
+// this function returns a database user instead of a session user
+export const getUserInfo = async ({userId}: getUserInfoProps) => {
+  try {
+    const { database } = await createAdminClient();
+
+    const user = await database.listDocuments(
+      DATABASE_ID!,
+      USER_COLLECTION_ID!,
+      [Query.equal("userId", [userId])]
+    );
+
+    //if (bank.total !== 1) return null;
+
+    return parseStringify(user.documents[0]);
+  } catch (error) {
+    console.error("Error", error);
+    return null;
+  }
+}
+
 export const signIn = async ({ email, password }: signInProps) => {
   try {
     /*  WE DO SIMILAR THING LIKE WE DID IN THE SIGN UP BY EXTRACTING THE ACCOUNT FROM CREATE ADMIN CLIENT
@@ -22,10 +49,19 @@ export const signIn = async ({ email, password }: signInProps) => {
   */
 
     const { account } = await createAdminClient();
+    // its important to store the session, otherwise when you log in it will immediately log you out
+    const session = await account.createEmailPasswordSession(email, password);
 
-    const response = await account.createEmailPasswordSession(email, password);
+    cookies().set("appwrite-session", session.secret, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "strict",
+      secure: true,
+    });
 
-    return parseStringify(response);
+    const user = await getUserInfo({ userId: session.userId});
+
+    return parseStringify(user);
   } catch (error) {
     console.error("Error", error);
   }
@@ -100,7 +136,9 @@ export const signUp = async ({password, ...userData}: SignUpParams) => {
 export async function getLoggedInUser() {
   try {
     const { account } = await createSessionClient();
-    const user = await account.get();
+    const result = await account.get();
+    
+    const user = await getUserInfo({userId: result.$id})
     return parseStringify(user);
   } catch (error) {
     return null;
@@ -128,7 +166,7 @@ export const createLinkToken = async (user: User) => {
         client_user_id: user.$id,
       },
       client_name: `${user.firstName} ${user.lastName}`,
-      products: ["auth"] as Products[],
+      products: ["auth", "transactions"] as Products[], 
       language: "en",
       country_codes: ["US"] as CountryCode[],
     };
@@ -152,8 +190,8 @@ export const createBankAccount = async ({
   try {
     const { database } = await createAdminClient();
     const bankAccount = await database.createDocument(
-      process.env.APPWRITE_DATABASE_ID!,
-      process.env.APPWRITE_BANK_COLLECTION_ID!,
+      DATABASE_ID!,
+      BANK_COLLECTION_ID!,
       ID.unique(),
       {
         userId,
@@ -166,7 +204,9 @@ export const createBankAccount = async ({
     );
 
     return parseStringify(bankAccount)
-  } catch (error) {}
+  } catch (error) {
+    console.error("Error", error);
+  }
 };
 
 /**
@@ -243,5 +283,67 @@ export const exchangePublicToken = async ({
   } catch (error) {
     // Log any errors that occur during the process
     console.error("An error occurred while creating exchanging token:", error);
+  }
+};
+
+
+// get user bank accounts
+export const getBanks = async ({ userId }: getBanksProps) => {
+  try {
+    const { database } = await createAdminClient();
+
+    // This is how to do database query within Appwrite
+    const banks = await database.listDocuments(
+      DATABASE_ID!,
+      BANK_COLLECTION_ID!,
+      [Query.equal("userId", [userId])] // this ensures we fetch the bank belonging to the specific user
+    );
+
+    return parseStringify(banks.documents);
+  } catch (error) {
+    console.error("Error", error);
+    return null;
+  }
+};
+
+
+// get specific bank from bank collection by document id
+export const getBank = async ({ documentId }: getBankProps) => {
+  try {
+    const { database } = await createAdminClient();
+
+    const bank = await database.listDocuments(
+      DATABASE_ID!,
+      BANK_COLLECTION_ID!,
+      [Query.equal("$id", [documentId])]
+    );
+
+    //if (bank.total !== 1) return null;
+
+    return parseStringify(bank.documents[0]);
+  } catch (error) {
+    console.error("Error", error);
+    return null;
+  }
+};
+
+export const getBankByAccountId = async ({
+  accountId,
+}: getBankByAccountIdProps) => {
+  try {
+    const { database } = await createAdminClient();
+
+    const bank = await database.listDocuments(
+      DATABASE_ID!,
+      BANK_COLLECTION_ID!,
+      [Query.equal("accountId", [accountId])]
+    );
+
+    if (bank.total !== 1) return null;
+
+    return parseStringify(bank.documents[0]);
+  } catch (error) {
+    console.error("Error", error);
+    return null;
   }
 };
