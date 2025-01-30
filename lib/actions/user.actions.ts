@@ -29,8 +29,12 @@ export const getUserInfo = async ({userId}: getUserInfoProps) => {
     const user = await database.listDocuments(
       DATABASE_ID!,
       USER_COLLECTION_ID!,
-      [Query.equal("userId", [userId])]
+      [Query.equal("userId", userId)]
     );
+
+    if (!user.documents.length) {
+      throw new Error(`User not found for userId: ${userId}`);
+    }
 
     //if (bank.total !== 1) return null;
 
@@ -110,6 +114,7 @@ export const signUp = async ({password, ...userData}: SignUpParams) => {
 
       }
     )
+
 
     const session = await account.createEmailPasswordSession(email, password);
 

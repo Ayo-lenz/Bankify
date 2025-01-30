@@ -123,6 +123,9 @@ const AuthForm = ({ type }: { type: string }) => {
         </div>
       ) : (
         <>
+          <p className="font-semibold text-sm">
+            While Signing up, Use the dummy data as in the input placeholder
+          </p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               {/* we want that when type = sign up, only then should it show this first part of
@@ -168,7 +171,7 @@ const AuthForm = ({ type }: { type: string }) => {
                       control={form.control}
                       name="postalCode"
                       label="Postal Code"
-                      placeholder="example: 110111"
+                      placeholder="example: 11011"
                     />
                   </div>
                   <div className="flex gap-4">
